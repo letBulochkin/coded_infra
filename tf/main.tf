@@ -7,15 +7,53 @@ resource "aws_vpc" "stand_vpc" {
     }
 }
 
+##########################################
+# Subnet definition
+##########################################
+
 # Create subnet for DNS Server, Ansible server, etc
 
-resource "aws_subnet" "service_subnet_comp1p" {
+resource "aws_subnet" "service_subnet_az0" {
+    vpc_id = aws_vpc.stand_vpc.id
+    cidr_block = "172.35.0.0/24"
+    availability_zone = var.azs[0]
+    tags = {  # As we can not refernce to resource itself, we can not substitute availability_zone attribute
+        Name = format("%s.%s.subnet.service", var.stand_name, var.azs[1])
+    }
+}
+
+resource "aws_subnet" "load_balancers_subnet_az1" {
     vpc_id = aws_vpc.stand_vpc.id
     cidr_block = "172.35.1.0/24"
     availability_zone = var.azs[1]
     tags = {
-        Name = format("%s[0].%s[1].subnet.service", var.stand_name, var.azs[1])
-        #Name = format(var.stand_name, ".", var.azs[1], "subnet.service")
+      "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[1])
+    }
+}
+
+resource "aws_subnet" "load_balancers_subnet_az0" {
+    vpc_id = aws_vpc.stand_vpc.id
+    cidr_block = "172.35.2.0/24"
+    availability_zone = var.azs[0]
+    tags = {
+      "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[0])
+    }
+}
+
+resource "aws_subnet" "backend_subnet_az1" {
+    vpc_id = aws_vpc.stand_vpc.id
+    cidr_block = "172.35.3.0/24"
+    availability_zone = var.azs[1]
+    tags = {
+      "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[1])
+    }
+}
+resource "aws_subnet" "backend_subnet_az0" {
+    vpc_id = aws_vpc.stand_vpc.id
+    cidr_block = "172.35.4.0/24"
+    availability_zone = var.azs[0]
+    tags = {
+      "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[0])
     }
 }
 
