@@ -48,6 +48,7 @@ resource "aws_subnet" "backend_subnet_az1" {
       "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[1])
     }
 }
+
 resource "aws_subnet" "backend_subnet_az0" {
     vpc_id = aws_vpc.stand_vpc.id
     cidr_block = "172.35.4.0/24"
@@ -59,26 +60,66 @@ resource "aws_subnet" "backend_subnet_az0" {
 
 # TODO: separate monolith configuration into modules
 
-resource "aws_security_group" "sg_allow_all" {  # TODO: add rules as separate resources
-    name = "allow all sg"
+##########################################
+# Security groups definition
+##########################################
+
+# TODO: add reposerver security group as soon as I figure it out
+
+resource "aws_security_group" "sg_allow_all" {
+    name = "allow_all_sg"
     vpc_id = aws_vpc.stand_vpc.id
 
-    ingress {
+    ingress {  # Q: Do I really need that?
         from_port = 0
         to_port = 0
         protocol = "-1"
         cidr_blocks = ["0.0.0.0/0"]
     }
+
+    egress {
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    tags = {
+        "Name" = format("%s.sec_group.allow_all", var.stand_name)
+    }
 }
 
-resource "aws_security_group" "sg_ansible_git_server" {
-    name = "ansible git server sg"
+resource "aws_security_group" "sg_repo_access" {  # TODO: make more strict, needs testing
+    name = "repo_access_sg"
+    description = "Set of firewall rules allowing outbound access to yum repos"
     vpc_id = aws_vpc.stand_vpc.id
 
-    # DNS ports
+    egress {
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    egress {
+        from_port = 443
+        to_port = 443
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    tags = {
+        "Name" = format("%s.sec_group.repo_access", var.stand_name)
+    }
+}
+
+resource "aws_security_group" "sg_ansible_dns_server" {
+    name = "ansible_dns_server_sg"
+    description = "Security group for DNS and Ansible server"
+    vpc_id = aws_vpc.stand_vpc.id
     
     egress {
-        description = "dns tcp"
+        description = "dns tcp"  # DNS ports
         from_port = 53
         to_port = 53
         protocol = "tcp"
@@ -92,11 +133,9 @@ resource "aws_security_group" "sg_ansible_git_server" {
         protocol = "udp"
         cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
     }
-
-    # SSH access ingoing and outgoing for Ansible
     
     ingress {
-        description = "ssh"
+        description = "ssh"  # SSH access ingoing and outgoing for Ansible
         from_port = 22
         to_port = 22
         protocol = "tcp"
@@ -110,11 +149,9 @@ resource "aws_security_group" "sg_ansible_git_server" {
         protocol = "tcp"
         cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
     }
-    
-    # git proto to access remote repo
 
     egress {
-        description = "git"
+        description = "git"  # git proto to access remote repo
         from_port = 9418
         to_port = 9418
         protocol = "tcp"
@@ -122,6 +159,149 @@ resource "aws_security_group" "sg_ansible_git_server" {
     }
 
     tags = {
-        Name = "croc_stand.security_group.service"
+        Name = format("%s.sec_group.ansible_dns_serv", var.stand_name)
+    }
+}
+
+resource "aws_security_group" "sg_ovpn_server" {
+    name = "ovpn_server_sg"
+    vpc_id = aws_vpc.stand_vpc.id
+
+    ingress {
+        description = "ovpn tcp"  # Q: Do I need inbound SSH rule?
+        from_port = 1194
+        to_port = 1194
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    egress {
+        description = "ssh out"
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
+    }
+
+    tags = {
+        Name = format("%s.sec_group.ovpn_serv", var.stand_name)
+    }
+}
+
+# resource "aws_security_group" "sg_service_subnet" { }
+#
+# Every node in service should have its own security group for additional security.
+
+resource "aws_security_group" "sg_load_balancers_subnet" {
+    name = "load_balancer_subnet_sg"
+    vpc_id = aws_vpc.stand_vpc.id
+
+    ingress {
+        description = "tcp 80"
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    ingress {
+        description = "tcp 8080"
+        from_port = 8080
+        to_port = 8080
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    ingress {
+        description = "haproxy stats"
+        from_port = 9000
+        to_port = 9000
+        protocol = "tcp"
+        cidr_blocks = ["172.35.0.0/24"]  # Give access from the service network for monitoring purposes
+    }
+
+    egress {
+        description = "tcp 80"
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["172.35.3.0/24", "172.35.4.0/24"]  # Give access to the backends network
+    }
+
+    egress {
+        description = "tcp 8080"
+        from_port = 8080
+        to_port = 8080
+        protocol = "tcp"
+        cidr_blocks = ["172.35.3.0/24", "172.35.4.0/24"]
+    }
+
+    ingress {
+        description = "ssh in from service"
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = ["172.35.0.0/24"]
+    }
+
+    egress {
+        description = "ssh out to lbs"
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
+    }
+
+    tags = {
+        Name = format("%s.sec_group.load_balancers_subnet", var.stand_name)
+    }
+}
+
+resource "aws_security_group" "sg_backends_subnet" {
+    name = "backends_subnet_sg"
+    vpc_id = aws_vpc.stand_vpc.id
+
+    ingress {
+        description = "tcp 80"
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
+    }
+
+    ingress {
+        description = "tcp 8080"
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
+    }
+
+    egress {
+        description = "S3 endpoint IP address"
+        from_port = -1
+        to_port = -1
+        protocol = -1
+        cidr_blocks = [format("%s/32", var.s3_endpoint_address), format("%s/32", var.s3_website_endpoint_address)]
+    }
+
+    ingress {
+        description = "ssh in from service"
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = ["172.35.0.0/24"]
+    }
+
+    egress {
+        description = "ssh out to backends"
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = ["172.35.3.0/24", "172.35.4.0/24"]
+    }
+
+    tags = {
+        Name = format("%s.sec_group.backends_subnet", var.stand_name)
     }
 }

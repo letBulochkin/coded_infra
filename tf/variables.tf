@@ -43,4 +43,12 @@ variable "template_centos75" {
     description = "Template ID for CentOS 7.5"
 }
 
+variable "s3_endpoint_address" {
+    type = string
+    description = "S3 bucket endpoint address"
+}
 
+variable "s3_website_endpoint_address" {
+    type = string
+    description = "S3 bucket-as-website endpoint address"
+}
