@@ -43,6 +43,16 @@ variable "template_centos75" {
     description = "Template ID for CentOS 7.5"
 }
 
+variable "template_centos78" {
+    type = string
+    description = "Template ID for CentOS 7.8"
+}
+
+variable "template_centos82" {
+    type = string
+    description = "Template ID for CentOS 8.2"
+}
+
 variable "s3_endpoint_address" {
     type = string
     description = "S3 bucket endpoint address"

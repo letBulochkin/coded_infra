@@ -279,9 +279,9 @@ resource "aws_security_group" "sg_backends_subnet" {
 
     egress {
         description = "S3 endpoint IP address"
-        from_port = -1
-        to_port = -1
-        protocol = -1
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
         cidr_blocks = [format("%s/32", var.s3_endpoint_address), format("%s/32", var.s3_website_endpoint_address)]
     }
 
@@ -303,5 +303,37 @@ resource "aws_security_group" "sg_backends_subnet" {
 
     tags = {
         Name = format("%s.sec_group.backends_subnet", var.stand_name)
+    }
+}
+
+##########################################
+# Instances definition
+##########################################
+
+resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming triggers redeploy. Use terraform state mv command
+    ami = var.template_centos82
+    instance_type = "m5.small"
+    availability_zone = aws_subnet.service_subnet_az0.availability_zone
+    subnet_id = aws_subnet.service_subnet_az0.id
+    key_name = var.ssh_key
+    associate_public_ip_address = true
+    vpc_security_group_ids = [ format("%s", aws_security_group.sg_allow_all.id) ]
+
+    tags = {
+        Name = format("%s.instance.service.ansible_dns_serv", var.stand_name)
+    }
+}
+
+resource "aws_instance" "inst_repo_server" {
+    ami = var.template_centos82
+    instance_type = "m5.small"
+    availability_zone = aws_subnet.service_subnet_az0.availability_zone
+    subnet_id = aws_subnet.service_subnet_az0.id
+    key_name = var.ssh_key
+    associate_public_ip_address = false
+    vpc_security_group_ids = [ format("%s", aws_security_group.sg_allow_all.id) ]
+
+    tags = {
+        Name = format("%s.instance.service.repo_serv", var.stand_name)
     }
 }
