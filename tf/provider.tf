@@ -1,3 +1,12 @@
+terraform {
+    required_providers {
+        aws = {
+            source  = "hc-registry.website.cloud.croc.ru/c2devel/croccloud"
+            version = "4.14.0-CROC4"
+        }
+    }
+}
+
 provider "aws" {
     endpoints {
         ec2 = var.ec2_url
