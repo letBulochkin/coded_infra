@@ -17,6 +17,11 @@ resource "aws_subnet" "service_subnet_az0" {
     vpc_id = aws_vpc.stand_vpc.id
     cidr_block = "172.35.0.0/24"
     availability_zone = var.azs[0]
+
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
     tags = {  # As we can not refernce to resource itself, we can not substitute availability_zone attribute
         Name = format("%s.%s.subnet.service", var.stand_name, var.azs[1])
     }
@@ -26,6 +31,11 @@ resource "aws_subnet" "load_balancers_subnet_az1" {
     vpc_id = aws_vpc.stand_vpc.id
     cidr_block = "172.35.1.0/24"
     availability_zone = var.azs[1]
+
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
     tags = {
       "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[1])
     }
@@ -35,6 +45,11 @@ resource "aws_subnet" "load_balancers_subnet_az0" {
     vpc_id = aws_vpc.stand_vpc.id
     cidr_block = "172.35.2.0/24"
     availability_zone = var.azs[0]
+
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
     tags = {
       "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[0])
     }
@@ -44,6 +59,11 @@ resource "aws_subnet" "backend_subnet_az1" {
     vpc_id = aws_vpc.stand_vpc.id
     cidr_block = "172.35.3.0/24"
     availability_zone = var.azs[1]
+
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
     tags = {
       "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[1])
     }
@@ -53,12 +73,33 @@ resource "aws_subnet" "backend_subnet_az0" {
     vpc_id = aws_vpc.stand_vpc.id
     cidr_block = "172.35.4.0/24"
     availability_zone = var.azs[0]
+
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
     tags = {
       "Name" = format("%s.%s.subnet.load_b", var.stand_name, var.azs[0])
     }
 }
 
 # TODO: separate monolith configuration into modules
+
+##########################################
+# Elastic IPs definition
+##########################################
+
+resource "aws_eip" "eip_service" {
+    #instance = aws_instance.inst_ansible_dns_serv.id
+    vpc = true
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
+    tags = {
+        Name = format("%s.eip.service.service_access", var.stand_name)
+    }
+}
 
 ##########################################
 # Security groups definition
@@ -84,6 +125,10 @@ resource "aws_security_group" "sg_allow_all" {
         cidr_blocks = ["0.0.0.0/0"]
     }
 
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
     tags = {
         "Name" = format("%s.sec_group.allow_all", var.stand_name)
     }
@@ -107,6 +152,10 @@ resource "aws_security_group" "sg_repo_access" {  # TODO: make more strict, need
         protocol = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
     }
+
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
 
     tags = {
         "Name" = format("%s.sec_group.repo_access", var.stand_name)
@@ -139,7 +188,7 @@ resource "aws_security_group" "sg_ansible_dns_server" {
         from_port = 22
         to_port = 22
         protocol = "tcp"
-        cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
+        cidr_blocks = ["0.0.0.0/0"]  # temp open for every address to gain outbound access
     }
 
     egress {
@@ -147,7 +196,7 @@ resource "aws_security_group" "sg_ansible_dns_server" {
         from_port = 22
         to_port = 22
         protocol = "tcp"
-        cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
+        cidr_blocks = ["0.0.0.0/0"]
     }
 
     egress {
@@ -157,6 +206,10 @@ resource "aws_security_group" "sg_ansible_dns_server" {
         protocol = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
     }
+
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
 
     tags = {
         Name = format("%s.sec_group.ansible_dns_serv", var.stand_name)
@@ -307,6 +360,15 @@ resource "aws_security_group" "sg_backends_subnet" {
 }
 
 ##########################################
+# SSH keypairs definition
+##########################################
+
+resource "aws_key_pair" "infra_sshkey" {
+    key_name = var.ssh_key
+    public_key = var.ssh_pubkey
+}
+
+##########################################
 # Instances definition
 ##########################################
 
@@ -314,26 +376,42 @@ resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming
     ami = var.template_centos82
     instance_type = "m5.small"
     availability_zone = aws_subnet.service_subnet_az0.availability_zone
-    subnet_id = aws_subnet.service_subnet_az0.id
     key_name = var.ssh_key
-    associate_public_ip_address = true
-    vpc_security_group_ids = [ format("%s", aws_security_group.sg_allow_all.id) ]
+
+    subnet_id = aws_subnet.service_subnet_az0.id
+    private_ip = replace(aws_subnet.service_subnet_az0.cidr_block, "0/24", "10")
+    associate_public_ip_address = false
+    vpc_security_group_ids = [
+        aws_security_group.sg_ansible_dns_server.id,
+        aws_security_group.sg_repo_access.id
+    ]
+
+    monitoring = true
+
+    ebs_block_device {
+        delete_on_termination = false
+        device_name = "disk1"
+        volume_type = var.default_volume_type
+        volume_size = 64
+
+        tags = {
+            # Better naming maybe?
+            Name = format("%s.ebs.service.ansible_dns_serv", var.default_volume_type)
+        }
+    }
+
+    depends_on = [
+      aws_vpc.stand_vpc,
+      aws_subnet.service_subnet_az0,
+      aws_key_pair.infra_sshkey
+    ]
 
     tags = {
         Name = format("%s.instance.service.ansible_dns_serv", var.stand_name)
     }
 }
 
-resource "aws_instance" "inst_repo_server" {
-    ami = var.template_centos82
-    instance_type = "m5.small"
-    availability_zone = aws_subnet.service_subnet_az0.availability_zone
-    subnet_id = aws_subnet.service_subnet_az0.id
-    key_name = var.ssh_key
-    associate_public_ip_address = false
-    vpc_security_group_ids = [ format("%s", aws_security_group.sg_allow_all.id) ]
-
-    tags = {
-        Name = format("%s.instance.service.repo_serv", var.stand_name)
-    }
+resource "aws_eip_association" "name" {
+    instance_id = aws_instance.inst_ansible_dns_serv.id
+    allocation_id = aws_eip.eip_service.id
 }

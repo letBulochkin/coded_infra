@@ -38,6 +38,11 @@ variable "ssh_key" {
     description = "SSH key name"
 }
 
+variable "ssh_pubkey" {
+    type = string
+    description = "SSH public key"
+}
+
 variable "template_centos75" {
     type = string
     description = "Template ID for CentOS 7.5"
@@ -61,4 +66,14 @@ variable "s3_endpoint_address" {
 variable "s3_website_endpoint_address" {
     type = string
     description = "S3 bucket-as-website endpoint address"
+}
+
+variable "service_eip" {
+    type = string
+    description = "Temporary EIP to directly access service node."
+}
+
+variable "default_volume_type" {
+    type = string
+    description = "Default volume type"
 }
