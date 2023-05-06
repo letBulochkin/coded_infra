@@ -374,7 +374,7 @@ resource "aws_key_pair" "infra_sshkey" {
 
 resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming triggers redeploy. Use terraform state mv command
     ami = var.template_centos82
-    instance_type = "m5.small"
+    instance_type = "m5.medium"
     availability_zone = aws_subnet.service_subnet_az0.availability_zone
     key_name = var.ssh_key
 
