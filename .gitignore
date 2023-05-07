@@ -2,3 +2,6 @@ tf/terraform
 tf/terraform.tfvars
 tf/terraform.tfstate*
 tf/.terraform/
+tf/.terraform.lock.hcl
+tf/.terraform.tfstate.lock.info
+tf/coded_infra_terraformrc.tfrc
