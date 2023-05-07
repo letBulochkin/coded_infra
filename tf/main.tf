@@ -388,6 +388,12 @@ resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming
 
     monitoring = true
 
+    # User data must be string. We read shell script file with file() function,
+    # then pass contents as the string using string interpolation ${}
+    # path.module variable is placed inside path string using intrepolation
+    # to tell Terraform correct path from which configuration is run.
+    user_data = "${file("${path.module}/../shell_scripts/ansible_install.sh")}"
+
     ebs_block_device {
         delete_on_termination = false
         device_name = "disk1"
