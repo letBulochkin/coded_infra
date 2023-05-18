@@ -324,8 +324,8 @@ resource "aws_security_group" "sg_backends_subnet" {
 
     ingress {
         description = "tcp 8080"
-        from_port = 80
-        to_port = 80
+        from_port = 8080
+        to_port = 8080
         protocol = "tcp"
         cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
     }
@@ -380,7 +380,7 @@ resource "aws_instance" "inst_service_host" {  # Remember: resource renaming tri
 
     subnet_id = aws_subnet.service_subnet_az0.id
     private_ip = replace(aws_subnet.service_subnet_az0.cidr_block, "0/24", "10")
-    associate_public_ip_address = false
+    associate_public_ip_address = true  # = false conflicts with aws_eip_association
     vpc_security_group_ids = [
         aws_security_group.sg_ansible_dns_server.id,
         aws_security_group.sg_repo_access.id
@@ -414,4 +414,43 @@ resource "aws_instance" "inst_service_host" {  # Remember: resource renaming tri
 resource "aws_eip_association" "name" {
     instance_id = aws_instance.inst_service_host.id
     allocation_id = aws_eip.eip_service.id
+}
+
+resource "aws_instance" "inst_backend_01" {
+    ami = var.template_centos82
+    instance_type = "m5.medium"
+    availability_zone = aws_subnet.backend_subnet_az0.availability_zone
+    key_name = var.ssh_key
+
+    subnet_id = aws_subnet.backend_subnet_az0.id
+    private_ip = replace(aws_subnet.backend_subnet_az0.cidr_block, "0/24", "10")
+    associate_public_ip_address = false
+    vpc_security_group_ids = [
+        aws_security_group.sg_backends_subnet.id,
+        aws_security_group.sg_repo_access.id
+    ]
+
+    monitoring = true
+
+    ebs_block_device {
+        delete_on_termination = false
+        device_name = "disk1"
+        volume_type = var.default_volume_type
+        volume_size = 64
+
+        tags = {
+            # Better naming maybe?
+            Name = format("%s.ebs.backends.inst_backend_01", var.default_volume_type)
+        }
+    }
+
+    depends_on = [
+      aws_vpc.stand_vpc,
+      aws_subnet.backend_subnet_az0,
+      aws_key_pair.infra_sshkey
+    ]
+
+    tags = {
+        Name = format("%s.instance.backends.inst_backend_01", var.stand_name)
+    }
 }
