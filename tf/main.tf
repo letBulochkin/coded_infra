@@ -372,7 +372,7 @@ resource "aws_key_pair" "infra_sshkey" {
 # Instances definition
 ##########################################
 
-resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming triggers redeploy. Use terraform state mv command
+resource "aws_instance" "inst_service_host" {  # Remember: resource renaming triggers redeploy. Use terraform state mv command
     ami = var.template_centos82
     instance_type = "m5.medium"
     availability_zone = aws_subnet.service_subnet_az0.availability_zone
@@ -388,12 +388,6 @@ resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming
 
     monitoring = true
 
-    # User data must be string. We read shell script file with file() function,
-    # then pass contents as the string using string interpolation ${}
-    # path.module variable is placed inside path string using intrepolation
-    # to tell Terraform correct path from which configuration is run.
-    user_data = "${file("${path.module}/../shell_scripts/ansible_install.sh")}"
-
     ebs_block_device {
         delete_on_termination = false
         device_name = "disk1"
@@ -402,7 +396,7 @@ resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming
 
         tags = {
             # Better naming maybe?
-            Name = format("%s.ebs.service.ansible_dns_serv", var.default_volume_type)
+            Name = format("%s.ebs.service.inst_service_host", var.default_volume_type)
         }
     }
 
@@ -413,11 +407,11 @@ resource "aws_instance" "inst_ansible_dns_serv" {  # Remember: resource renaming
     ]
 
     tags = {
-        Name = format("%s.instance.service.ansible_dns_serv", var.stand_name)
+        Name = format("%s.instance.service.inst_service_host", var.stand_name)
     }
 }
 
 resource "aws_eip_association" "name" {
-    instance_id = aws_instance.inst_ansible_dns_serv.id
+    instance_id = aws_instance.inst_service_host.id
     allocation_id = aws_eip.eip_service.id
 }

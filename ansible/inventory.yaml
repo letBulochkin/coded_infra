@@ -1,0 +1,10 @@
+---
+
+jumphost:
+  hosts:
+    service_host:
+      ansible_host: soup.service  # set this hostname along with aws_eip.eip_service.public_ip in /etc/hosts
+
+soup_managed_infra:
+  children:
+    jumphost:
