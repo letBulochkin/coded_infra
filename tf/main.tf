@@ -106,6 +106,7 @@ resource "aws_eip" "eip_service" {
 ##########################################
 
 # TODO: add reposerver security group as soon as I figure it out
+# TODO: refactor this!
 
 resource "aws_security_group" "sg_allow_all" {
     name = "allow_all_sg"
@@ -167,7 +168,7 @@ resource "aws_security_group" "sg_ansible_dns_server" {
     description = "Security group for DNS and Ansible server"
     vpc_id = aws_vpc.stand_vpc.id
     
-    egress {
+    ingress {
         description = "dns tcp"  # DNS ports
         from_port = 53
         to_port = 53
@@ -175,7 +176,7 @@ resource "aws_security_group" "sg_ansible_dns_server" {
         cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
     }
 
-    egress {
+    ingress {
         description = "dns udp"
         from_port = 53
         to_port = 53
@@ -305,6 +306,14 @@ resource "aws_security_group" "sg_load_balancers_subnet" {
         cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
     }
 
+    egress {
+        description = "DNS UDP"
+        from_port = 53
+        to_port = 53
+        protocol = "udp"
+        cidr_blocks = ["172.35.0.0/24"]
+    }
+
     tags = {
         Name = format("%s.sec_group.load_balancers_subnet", var.stand_name)
     }
@@ -354,6 +363,13 @@ resource "aws_security_group" "sg_backends_subnet" {
         cidr_blocks = ["172.35.3.0/24", "172.35.4.0/24"]
     }
 
+    egress {
+        description = "DNS UDP"
+        from_port = 53
+        to_port = 53
+        protocol = "udp"
+        cidr_blocks = ["172.35.0.0/24"]
+    }
     tags = {
         Name = format("%s.sec_group.backends_subnet", var.stand_name)
     }
@@ -366,6 +382,20 @@ resource "aws_security_group" "sg_backends_subnet" {
 resource "aws_key_pair" "infra_sshkey" {
     key_name = var.ssh_key
     public_key = var.ssh_pubkey
+}
+
+##########################################
+# DHCP options definition
+##########################################
+
+resource "aws_vpc_dhcp_options" "dhcopts_stand_vpc" {
+    domain_name = "soup-int.msk.ru"
+    domain_name_servers = [ "172.35.0.10" ]
+}
+
+resource "aws_vpc_dhcp_options_association" "assoc_dhcpopts_stand_vps" {
+    vpc_id = aws_vpc.stand_vpc.id
+    dhcp_options_id = aws_vpc_dhcp_options.dhcopts_stand_vpc.id
 }
 
 ##########################################

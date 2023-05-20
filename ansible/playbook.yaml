@@ -1,5 +1,5 @@
 ---
-- name: Set PS1
+- name: Setup Service Host
   hosts: service_host
   tasks:
     - name: Create PS1 shell script
@@ -7,6 +7,50 @@
         dest: "/etc/profile.d/ps1.sh"
         content: |
           PS1="\[\e[34m\][\A]:\[\e[30;43m\][\u@\h \W]\[\e[0m\]\[\e[32m\]$\[\e[0m\] "
+    - block:
+      - name: Install BIND9  # maybe move to a separate role
+        yum:
+          name:
+            - bind
+            - bind-utils
+          state: present
+      - name: Copy named.conf  # maybe try to use templates, but for now I don't think that's a good idea
+        copy:
+          src: files/bind/named.conf
+          dest: /etc/named.conf
+          mode: '0644'
+      - name:
+        file:
+          state: directory
+          path: /var/named/zones
+          mode: '0755'
+      - name: Copy primary zone file
+        copy:
+          src: files/bind/soup-int.msk.ru.zone
+          dest: /var/named/zones/soup-int.msk.ru.zone
+          mode: '0644'
+          backup: yes
+      - name: Copy reverse zone file
+        copy:
+          src: files/bind/35.172.in-addr.arpa.zone
+          dest: /var/named/zones/35.172.in-addr.arpa.zone
+          mode: '0644'
+          backup: yes
+      - name: Verify named.conf
+        command: named-checkconf
+      - name: Verify primary zone file
+        command: named-checkzone soup-int.msk.ru /var/named/zones/soup-int.msk.ru.zone
+      - name: Verify reverse zone file
+        command: named-checkzone 35.172.in-addr.arpa.zone /var/named/zones/35.172.in-addr.arpa.zone
+      notify:
+        start_bind
+  handlers:
+    - name: start_bind
+      systemd:
+        name: named
+        enabled: yes
+        state: started
+
 - name: Set PS1 on backend
   hosts: backends
   tasks:
