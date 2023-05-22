@@ -168,45 +168,73 @@ resource "aws_security_group" "sg_ansible_dns_server" {
     description = "Security group for DNS and Ansible server"
     vpc_id = aws_vpc.stand_vpc.id
     
-    ingress {
-        description = "dns tcp"  # DNS ports
+    ingress = [ {
+        description = "dns tcp"
         from_port = 53
         to_port = 53
         protocol = "tcp"
         cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
-    }
-
-    ingress {
+        ipv6_cidr_blocks = null  # So this is extremely dull. You can add SG rules as repeatable nested blocks, or you can
+        prefix_list_ids = null   # add them as single nested block for list of inbound/outbound rules. However, if you use
+        security_groups = null   # second approach, you are forced to set all of the parameters explicitly, even those you
+        self = null              # are not intend to use. You still need to assign them null value. Shit.
+    },
+    {
         description = "dns udp"
         from_port = 53
         to_port = 53
         protocol = "udp"
         cidr_blocks = [aws_vpc.stand_vpc.cidr_block]
-    }
-    
-    ingress {
+        ipv6_cidr_blocks = null  # So you either use repeated ingress/egress blocks (as I do below), or keep setting same
+        prefix_list_ids = null   # parameters to null. Either way is not beautifull at all.
+        security_groups = null   # Also need to look at aws_security_group_rule resource as a better way to organize
+        self = null              # firewall rules.
+    },
+    {
         description = "ssh"  # SSH access ingoing and outgoing for Ansible
         from_port = 22
         to_port = 22
         protocol = "tcp"
         cidr_blocks = ["0.0.0.0/0"]  # temp open for every address to gain outbound access
-    }
+        ipv6_cidr_blocks = null
+        prefix_list_ids = null
+        security_groups = null
+        self = null
+    } ]
 
-    egress {
+    egress = [ {
         description = "ssh"
         from_port = 22
         to_port = 22
         protocol = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
-    }
-
-    egress {
+        ipv6_cidr_blocks = null
+        prefix_list_ids = null
+        security_groups = null
+        self = null
+    },
+    {
         description = "git"  # git proto to access remote repo
         from_port = 9418
         to_port = 9418
         protocol = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
-    }
+        ipv6_cidr_blocks = null
+        prefix_list_ids = null
+        security_groups = null
+        self = null
+    },
+    {
+        description = "dns udp"
+        from_port = 53
+        to_port = 53
+        protocol = "udp"
+        cidr_blocks = [ "77.88.8.8/32" ]
+        ipv6_cidr_blocks = null
+        prefix_list_ids = null
+        security_groups = null
+        self = null
+    } ]
 
     depends_on = [
       aws_vpc.stand_vpc
@@ -271,23 +299,7 @@ resource "aws_security_group" "sg_load_balancers_subnet" {
         from_port = 9000
         to_port = 9000
         protocol = "tcp"
-        cidr_blocks = ["172.35.0.0/24"]  # Give access from the service network for monitoring purposes
-    }
-
-    egress {
-        description = "tcp 80"
-        from_port = 80
-        to_port = 80
-        protocol = "tcp"
-        cidr_blocks = ["172.35.3.0/24", "172.35.4.0/24"]  # Give access to the backends network
-    }
-
-    egress {
-        description = "tcp 8080"
-        from_port = 8080
-        to_port = 8080
-        protocol = "tcp"
-        cidr_blocks = ["172.35.3.0/24", "172.35.4.0/24"]
+        cidr_blocks = [aws_subnet.service_subnet_az0.cidr_block]  # Give access from the service network for monitoring
     }
 
     ingress {
@@ -295,7 +307,29 @@ resource "aws_security_group" "sg_load_balancers_subnet" {
         from_port = 22
         to_port = 22
         protocol = "tcp"
-        cidr_blocks = ["172.35.0.0/24"]
+        cidr_blocks = [aws_subnet.service_subnet_az0.cidr_block]
+    }
+
+    egress {
+        description = "tcp 80 to backends"
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = [
+            aws_subnet.backend_subnet_az1.cidr_block,
+            aws_subnet.backend_subnet_az0.cidr_block
+        ]
+    }
+
+    egress {
+        description = "tcp 8080 to backends"
+        from_port = 8080
+        to_port = 8080
+        protocol = "tcp"
+        cidr_blocks = [
+            aws_subnet.backend_subnet_az1.cidr_block,
+            aws_subnet.backend_subnet_az0.cidr_block
+        ]
     }
 
     egress {
@@ -303,15 +337,18 @@ resource "aws_security_group" "sg_load_balancers_subnet" {
         from_port = 22
         to_port = 22
         protocol = "tcp"
-        cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
+        cidr_blocks = [
+            aws_subnet.load_balancers_subnet_az1.cidr_block,
+            aws_subnet.load_balancers_subnet_az0.cidr_block
+        ]
     }
 
     egress {
-        description = "DNS UDP"
+        description = "dns udp"
         from_port = 53
         to_port = 53
         protocol = "udp"
-        cidr_blocks = ["172.35.0.0/24"]
+        cidr_blocks = [aws_subnet.service_subnet_az0.cidr_block]
     }
 
     tags = {
@@ -324,19 +361,33 @@ resource "aws_security_group" "sg_backends_subnet" {
     vpc_id = aws_vpc.stand_vpc.id
 
     ingress {
-        description = "tcp 80"
+        description = "tcp 80 from lbs"
         from_port = 80
         to_port = 80
         protocol = "tcp"
-        cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
+        cidr_blocks = [
+            aws_subnet.load_balancers_subnet_az1.cidr_block,
+            aws_subnet.load_balancers_subnet_az0.cidr_block
+        ]
     }
 
     ingress {
-        description = "tcp 8080"
+        description = "tcp 8080 from lbs"
         from_port = 8080
         to_port = 8080
         protocol = "tcp"
-        cidr_blocks = ["172.35.1.0/24", "172.35.2.0/24"]
+        cidr_blocks = [
+            aws_subnet.load_balancers_subnet_az1.cidr_block,
+            aws_subnet.load_balancers_subnet_az0.cidr_block
+        ]
+    }
+
+    ingress {
+        description = "ssh in from service"
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = [aws_subnet.service_subnet_az0.cidr_block]
     }
 
     egress {
@@ -347,20 +398,15 @@ resource "aws_security_group" "sg_backends_subnet" {
         cidr_blocks = [format("%s/32", var.s3_endpoint_address), format("%s/32", var.s3_website_endpoint_address)]
     }
 
-    ingress {
-        description = "ssh in from service"
-        from_port = 22
-        to_port = 22
-        protocol = "tcp"
-        cidr_blocks = ["172.35.0.0/24"]
-    }
-
     egress {
         description = "ssh out to backends"
         from_port = 22
         to_port = 22
         protocol = "tcp"
-        cidr_blocks = ["172.35.3.0/24", "172.35.4.0/24"]
+        cidr_blocks = [
+            aws_subnet.backend_subnet_az1.cidr_block,
+            aws_subnet.backend_subnet_az0.cidr_block
+        ]
     }
 
     egress {
@@ -368,7 +414,7 @@ resource "aws_security_group" "sg_backends_subnet" {
         from_port = 53
         to_port = 53
         protocol = "udp"
-        cidr_blocks = ["172.35.0.0/24"]
+        cidr_blocks = [aws_subnet.service_subnet_az0.cidr_block]
     }
     tags = {
         Name = format("%s.sec_group.backends_subnet", var.stand_name)
