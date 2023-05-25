@@ -101,6 +101,17 @@ resource "aws_eip" "eip_service" {
     }
 }
 
+resource "aws_eip" "eip_public" {
+    vpc = true
+    depends_on = [
+      aws_vpc.stand_vpc
+    ]
+
+    tags = {
+        Name = format("%s.eip.load_b.public_access", var.stand_name)
+    }
+}
+
 ##########################################
 # Security groups definition
 ##########################################
@@ -361,6 +372,13 @@ resource "aws_security_group" "sg_backends_subnet" {
     vpc_id = aws_vpc.stand_vpc.id
 
     ingress {
+        description = "tcp 80 from everywhere"  # temp rule before load balancers deploy
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+    ingress {
         description = "tcp 80 from lbs"
         from_port = 80
         to_port = 80
@@ -391,6 +409,20 @@ resource "aws_security_group" "sg_backends_subnet" {
     }
 
     egress {
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    egress {
+        from_port = 443
+        to_port = 443
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    egress {
         description = "S3 endpoint IP address"
         from_port = 0
         to_port = 0
@@ -416,6 +448,8 @@ resource "aws_security_group" "sg_backends_subnet" {
         protocol = "udp"
         cidr_blocks = [aws_subnet.service_subnet_az0.cidr_block]
     }
+
+
     tags = {
         Name = format("%s.sec_group.backends_subnet", var.stand_name)
     }
@@ -500,7 +534,7 @@ resource "aws_instance" "inst_backend_01" {
 
     subnet_id = aws_subnet.backend_subnet_az0.id
     private_ip = replace(aws_subnet.backend_subnet_az0.cidr_block, "0/24", "10")
-    associate_public_ip_address = false
+    associate_public_ip_address = true
     vpc_security_group_ids = [
         aws_security_group.sg_backends_subnet.id,
         aws_security_group.sg_repo_access.id
@@ -529,4 +563,9 @@ resource "aws_instance" "inst_backend_01" {
     tags = {
         Name = format("%s.instance.backends.inst_backend_01", var.stand_name)
     }
+}
+
+resource "aws_eip_association" "public_to_backend_eip_assoc" {
+    instance_id = aws_instance.inst_backend_01.id
+    allocation_id = aws_eip.eip_public.id
 }

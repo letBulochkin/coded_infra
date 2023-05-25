@@ -51,11 +51,42 @@
         enabled: yes
         state: started
 
-- name: Set PS1 on backend
+- name: Setup backend hosts
   hosts: backends
+  vars:
+    nginx_launch_user: root  # TODO: use non-root maybe?
+    worker_processes: auto
+    worker_connections: 1024
+    soup_primary_eip: "185.12.30.91"  # TODO: get data from Terraform output
+    proxy_web_address: "letbulochkin.github.io"
   tasks:
     - name: Create PS1 shell script
       copy:
         dest: "/etc/profile.d/ps1.sh"
         content: |
           PS1="\[\e[34m\][\A]:\[\e[30;42m\][\u@\h \W]\[\e[0m\]\[\e[32m\]$\[\e[0m\] "
+    - name: Install NGINX
+      yum:
+        name: nginx
+        state: present
+      notify:
+        start_nginx
+    - block:
+      - name: Copy NGINX config
+        template:
+          src: files/nginx/templates/nginx.conf
+          dest: /etc/nginx/nginx.conf
+      - name: Verify NGINX config
+        command: nginx -t -c /etc/nginx/nginx.conf
+      notify:
+        restart_nginx
+  handlers:
+    - name: start_nginx
+      systemd:
+        name: nginx
+        enabled: yes
+        state: started
+    - name: restart_nginx
+      systemd:
+        name: nginx
+        state: restarted
