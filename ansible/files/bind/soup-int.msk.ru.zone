@@ -1,6 +1,6 @@
 $TTL 86400
 @   IN  SOA ns01.soup-int.msk.ru. admin.soup-int.msk.ru. (
-            2023051901  ; serial
+            2023052601  ; serial
             1D          ; refresh
             10M         ; retry
             1W          ; expire
@@ -11,4 +11,7 @@ $TTL 86400
 ns01        IN  A   172.35.0.10
 jumphost    IN  A   172.35.0.10
 
+lb01        IN  A   172.35.2.10
+
 backend01   IN  A   172.35.4.10
+backend02   IN  A   172.35.3.10

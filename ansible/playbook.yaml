@@ -7,13 +7,15 @@
         dest: "/etc/profile.d/ps1.sh"
         content: |
           PS1="\[\e[34m\][\A]:\[\e[30;43m\][\u@\h \W]\[\e[0m\]\[\e[32m\]$\[\e[0m\] "
+    - name: Install BIND9  # maybe move to a separate role
+      yum:
+        name:
+          - bind
+          - bind-utils
+        state: present
+      notify:
+        start_bind
     - block:
-      - name: Install BIND9  # maybe move to a separate role
-        yum:
-          name:
-            - bind
-            - bind-utils
-          state: present
       - name: Copy named.conf  # maybe try to use templates, but for now I don't think that's a good idea
         copy:
           src: files/bind/named.conf
@@ -43,13 +45,17 @@
       - name: Verify reverse zone file
         command: named-checkzone 35.172.in-addr.arpa.zone /var/named/zones/35.172.in-addr.arpa.zone
       notify:
-        start_bind
+        restart_bind
   handlers:
     - name: start_bind
       systemd:
         name: named
         enabled: yes
         state: started
+    - name: restart_bind
+      systemd:
+        name: named
+        state: restarted
 
 - name: Setup backend hosts
   hosts: backends
@@ -89,4 +95,39 @@
     - name: restart_nginx
       systemd:
         name: nginx
+        state: restarted
+
+- name: Setup Load Balancers
+  hosts: load_balancers
+  tasks:
+    - name: Create PS1 shell script
+      copy:
+        dest: /etc/profile.d/ps1.sh
+        content: |
+          PS1="\[\e[34m\][\A]:\[\e[30;42m\][\u@\h \W]\[\e[0m\]\[\e[32m\]$\[\e[0m\] "
+    - name: Install HAProxy
+      yum:
+        name: haproxy
+        state: present
+      notify:
+        start_haproxy
+    - block:
+      - name: Setup HAProxy  # This whole section is done in a great hurry. Needs tuning
+        copy:
+          src: files/haproxy/haproxy.cfg
+          dest: /etc/haproxy/haproxy.cfg
+          mode: '0644'
+      - name: Verify HAProxy config
+        command: haproxy -c -f /etc/haproxy/haproxy.cfg
+      notify:
+        restart_haproxy
+  handlers:
+    - name: start_haproxy
+      systemd:
+        name: haproxy
+        enabled: yes
+        state: started
+    - name: restart_haproxy
+      systemd:
+        name: haproxy
         state: restarted

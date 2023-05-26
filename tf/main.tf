@@ -372,13 +372,6 @@ resource "aws_security_group" "sg_backends_subnet" {
     vpc_id = aws_vpc.stand_vpc.id
 
     ingress {
-        description = "tcp 80 from everywhere"  # temp rule before load balancers deploy
-        from_port = 80
-        to_port = 80
-        protocol = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
-    ingress {
         description = "tcp 80 from lbs"
         from_port = 80
         to_port = 80
@@ -448,7 +441,6 @@ resource "aws_security_group" "sg_backends_subnet" {
         protocol = "udp"
         cidr_blocks = [aws_subnet.service_subnet_az0.cidr_block]
     }
-
 
     tags = {
         Name = format("%s.sec_group.backends_subnet", var.stand_name)
@@ -526,6 +518,50 @@ resource "aws_eip_association" "name" {
     allocation_id = aws_eip.eip_service.id
 }
 
+resource "aws_instance" "inst_loadbalancer_01" {
+    ami = var.template_centos82
+    instance_type = "m5.medium"
+    availability_zone = aws_subnet.load_balancers_subnet_az0.availability_zone
+    key_name = var.ssh_key
+
+    subnet_id = aws_subnet.load_balancers_subnet_az0.id
+    private_ip = replace(aws_subnet.load_balancers_subnet_az0.cidr_block, "0/24", "10")
+    associate_public_ip_address = true
+    vpc_security_group_ids = [
+        aws_security_group.sg_load_balancers_subnet.id,
+        aws_security_group.sg_repo_access.id
+    ]
+
+    monitoring = true
+
+    ebs_block_device {
+        delete_on_termination = false
+        device_name = "disk1"
+        volume_type = var.default_volume_type
+        volume_size = 64
+
+        tags = {
+            # Better naming maybe?
+            Name = format("%s.ebs.backends.inst_loadbalancer_01", var.default_volume_type)
+        }
+    }
+
+    depends_on = [
+      aws_vpc.stand_vpc,
+      aws_subnet.load_balancers_subnet_az0,
+      aws_key_pair.infra_sshkey
+    ]
+
+    tags = {
+        Name = format("%s.instance.load_balancers.inst_loadb_01", var.stand_name)
+    }
+}
+
+resource "aws_eip_association" "public_to_loadbalancer_eip_assoc" {
+    instance_id = aws_instance.inst_loadbalancer_01.id
+    allocation_id = aws_eip.eip_public.id
+}
+
 resource "aws_instance" "inst_backend_01" {
     ami = var.template_centos82
     instance_type = "m5.medium"
@@ -534,7 +570,7 @@ resource "aws_instance" "inst_backend_01" {
 
     subnet_id = aws_subnet.backend_subnet_az0.id
     private_ip = replace(aws_subnet.backend_subnet_az0.cidr_block, "0/24", "10")
-    associate_public_ip_address = true
+    associate_public_ip_address = false
     vpc_security_group_ids = [
         aws_security_group.sg_backends_subnet.id,
         aws_security_group.sg_repo_access.id
@@ -565,7 +601,41 @@ resource "aws_instance" "inst_backend_01" {
     }
 }
 
-resource "aws_eip_association" "public_to_backend_eip_assoc" {
-    instance_id = aws_instance.inst_backend_01.id
-    allocation_id = aws_eip.eip_public.id
+resource "aws_instance" "inst_backend_02" {
+    ami = var.template_centos82
+    instance_type = "m5.medium"
+    availability_zone = aws_subnet.backend_subnet_az1.availability_zone
+    key_name = var.ssh_key
+
+    subnet_id = aws_subnet.backend_subnet_az1.id
+    private_ip = replace(aws_subnet.backend_subnet_az1.cidr_block, "0/24", "10")
+    associate_public_ip_address = false
+    vpc_security_group_ids = [
+        aws_security_group.sg_backends_subnet.id,
+        aws_security_group.sg_repo_access.id
+    ]
+
+    monitoring = true
+
+    ebs_block_device {
+        delete_on_termination = false
+        device_name = "disk1"
+        volume_type = var.default_volume_type
+        volume_size = 64
+
+        tags = {
+            # Better naming maybe?
+            Name = format("%s.ebs.backends.inst_backend_02", var.default_volume_type)
+        }
+    }
+
+    depends_on = [
+      aws_vpc.stand_vpc,
+      aws_subnet.backend_subnet_az1,
+      aws_key_pair.infra_sshkey
+    ]
+
+    tags = {
+        Name = format("%s.instance.backends.inst_backend_02", var.stand_name)
+    }
 }

@@ -5,15 +5,23 @@ jumphost:
     service_host:
       ansible_host: 172.35.0.10
 
+load_balancers:
+  hosts:
+    loadbalancer01:
+      ansible_host: 172.35.2.10
+
 backends:
   hosts:
     backend01:
       ansible_host: 172.35.4.10
+    backend02:
+      ansible_host: 172.35.3.10
 
 soup_managed_infra:
   children:
     jumphost:
     backends:
+    load_balancers:
   vars:
     ansible_ssh_common_args: >-  # set soup.service record to /etc/hosts
       -o ForwardAgent=yes -o ControlMaster=auto -o ControlPersist=2m
